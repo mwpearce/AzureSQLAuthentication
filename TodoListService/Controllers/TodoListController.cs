@@ -14,16 +14,15 @@
 //    limitations under the License.
 //----------------------------------------------------------------------------------------------
 
-using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Configuration;
+using System.Data.SqlClient;
 using System.Net;
 using System.Net.Http;
-using System.Web.Http;
-
-using System.Collections.Concurrent;
-using TodoListService.Models;
 using System.Security.Claims;
+using System.Web.Http;
+using System.Web.Http.Cors;
+using TodoListService.Models;
 
 namespace TodoListService.Controllers
 {
@@ -31,9 +30,9 @@ namespace TodoListService.Controllers
     public class TodoListController : ApiController
     {
         //
-        // To Do items list for all users.  Since the list is stored in memory, it will go away if the service is cycled.
+        // To authenticate to the SQL Azure API, the app needs to know the SQL Azure API's App ID URI.
         //
-        static ConcurrentBag<TodoItem> todoBag = new ConcurrentBag<TodoItem>();
+        private static string armResourceId = ConfigurationManager.AppSettings["ida:ARMResourceId"];
 
         // GET api/todolist
         public IEnumerable<TodoItem> Get()
@@ -50,9 +49,34 @@ namespace TodoListService.Controllers
             // A user's To Do list is keyed off of the NameIdentifier claim, which contains an immutable, unique identifier for the user.
             Claim subject = ClaimsPrincipal.Current.FindFirst(ClaimTypes.NameIdentifier);
 
-            return from todo in todoBag
-                   where todo.Owner == subject.Value
-                   select todo;
+            using (SqlConnection conn = new SqlConnection(ConfigurationManager.ConnectionStrings["ToDoList"].ConnectionString))
+            {
+                if (!conn.ConnectionString.ToUpper().Contains("USER ID"))
+                {
+                    conn.AccessToken = Utils.AccessToken.GetAzureSqlAccessToken();
+                }
+                conn.Open();
+
+                using (SqlCommand cmd = new SqlCommand("SELECT ID, Title, Owner FROM ToDoItems WHERE Owner = @Owner", conn))
+                {
+                    cmd.CommandType = System.Data.CommandType.Text;
+                    cmd.Parameters.AddWithValue("@Owner", subject.Value);
+
+                    List<TodoItem> items = new List<TodoItem>();
+                    SqlDataReader rdr = cmd.ExecuteReader();
+                    while (rdr.Read())
+                    {
+                        items.Add(new TodoItem
+                        {
+                            ID = (int)rdr["ID"],
+                            Title = (string)rdr["Title"],
+                            Owner = (string)rdr["Owner"]
+                        });
+                    }
+
+                    return items;
+                }
+            }
         }
 
         // POST api/todolist
@@ -65,7 +89,23 @@ namespace TodoListService.Controllers
 
             if (null != todo && !string.IsNullOrWhiteSpace(todo.Title))
             {
-                todoBag.Add(new TodoItem { Title = todo.Title, Owner = ClaimsPrincipal.Current.FindFirst(ClaimTypes.NameIdentifier).Value });
+                using (SqlConnection conn = new SqlConnection(ConfigurationManager.ConnectionStrings["ToDoList"].ConnectionString))
+                {
+                    if (!conn.ConnectionString.ToUpper().Contains("USER ID"))
+                    {
+                        conn.AccessToken = Utils.AccessToken.GetAzureSqlAccessToken();
+                    }
+                    conn.Open();
+
+                    using (SqlCommand cmd = new SqlCommand("INSERT INTO ToDoItems (Title, Owner) VALUES (@Title, @Owner)", conn))
+                    {
+                        cmd.CommandType = System.Data.CommandType.Text;
+                        cmd.Parameters.AddWithValue("@Title", todo.Title);
+                        cmd.Parameters.AddWithValue("@Owner", ClaimsPrincipal.Current.FindFirst(ClaimTypes.NameIdentifier).Value);
+
+                        cmd.ExecuteNonQuery();
+                    }
+                }
             }
         }
     }

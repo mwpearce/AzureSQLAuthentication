@@ -21,13 +21,10 @@ using System.Web;
 
 namespace TodoListService.Models
 {
-    public class TodoItem
+    public class UserProfile
     {
-        public int ID
-        {
-            get; set;
-        }
-        public string Title { get; set; }
-        public string Owner { get; set; }
+        public string DisplayName { get; set; }
+        public string GivenName { get; set; }
+        public string Surname { get; set; }
     }
 }

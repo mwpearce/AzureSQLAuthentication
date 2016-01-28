@@ -24,9 +24,13 @@
 {
     <p>You have to sign-in to see your profile. Click @Html.ActionLink("here", "Index", "UserProfile", new { reauth = true }, null) to sign-in.</p>
 }
-
-@if (ViewBag.ErrorMessage == "UnexpectedError")
+else if (ViewBag.ErrorMessage == "UnexpectedError")
 {
     <p>An unexpected error occurred while retrieving your profile.  Please try again.  You may need to sign-in.</p>
 }
+else if (!String.IsNullOrEmpty(ViewBag.ErrorMessage))
+{
+    <p>@ViewBag.ErrorMessage</p>
+}
+
 

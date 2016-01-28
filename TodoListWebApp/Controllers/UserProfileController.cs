@@ -39,8 +39,8 @@ namespace TodoListWebApp.Controllers
     [Authorize]
     public class UserProfileController : Controller
     {
-        private string graphResourceId = ConfigurationManager.AppSettings["ida:GraphResourceId"];
-        private string graphUserUrl = ConfigurationManager.AppSettings["ida:GraphUserUrl"];
+        private string todoListResourceId = ConfigurationManager.AppSettings["todo:TodoListResourceId"];
+        private string todoListBaseAddress = ConfigurationManager.AppSettings["todo:TodoListBaseAddress"];
         private const string TenantIdClaimType = "http://schemas.microsoft.com/identity/claims/tenantid";
         private static string clientId = ConfigurationManager.AppSettings["ida:ClientId"];
         private static string appKey = ConfigurationManager.AppSettings["ida:AppKey"];
@@ -57,21 +57,16 @@ namespace TodoListWebApp.Controllers
 
             try
             {
-                string tenantId = ClaimsPrincipal.Current.FindFirst(TenantIdClaimType).Value;
                 string userObjectID = ClaimsPrincipal.Current.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier").Value;
                 AuthenticationContext authContext = new AuthenticationContext(Startup.Authority, new NaiveSessionCache(userObjectID));
                 ClientCredential credential = new ClientCredential(clientId, appKey);
-                result = authContext.AcquireTokenSilent(graphResourceId, credential, new UserIdentifier(userObjectID, UserIdentifierType.UniqueId));
+                result = authContext.AcquireTokenSilent(todoListResourceId, credential, new UserIdentifier(userObjectID, UserIdentifierType.UniqueId));
 
                 //
-                // Call the Graph API and retrieve the user's profile.
+                // Retrieve the user's profile from the ToDoList Service
                 //
-                string requestUrl = String.Format(
-                    CultureInfo.InvariantCulture,
-                    graphUserUrl,
-                    HttpUtility.UrlEncode(tenantId));
                 HttpClient client = new HttpClient();
-                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, todoListBaseAddress + "/api/userprofile");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", result.AccessToken);
                 HttpResponseMessage response = await client.SendAsync(request);
 
@@ -85,18 +80,23 @@ namespace TodoListWebApp.Controllers
                 }
                 else
                 {
+                    var todoTokens = authContext.TokenCache.ReadItems().Where(a => a.Resource == todoListResourceId);
+                    foreach (TokenCacheItem tci in todoTokens)
+                        authContext.TokenCache.DeleteItem(tci);
+
                     //
                     // If the call failed, then drop the current access token and show the user an error indicating they might need to sign-in again.
                     //
-                    var todoTokens = authContext.TokenCache.ReadItems().Where(a => a.Resource == graphResourceId);
-                    foreach (TokenCacheItem tci in todoTokens)
-                        authContext.TokenCache.DeleteItem(tci);
+                    //var todoTokens = authContext.TokenCache.ReadItems().Where(a => a.Resource == graphResourceId);
+                    //foreach (TokenCacheItem tci in todoTokens)
+                    //    authContext.TokenCache.DeleteItem(tci);
 
                     profile = new UserProfile();
                     profile.DisplayName = " ";
                     profile.GivenName = " ";
                     profile.Surname = " ";
-                    ViewBag.ErrorMessage = "UnexpectedError";
+                    //ViewBag.ErrorMessage = "UnexpectedError";
+                    ViewBag.ErrorMessage = response.ReasonPhrase;
                 }
 
                 return View(profile);
@@ -128,9 +128,9 @@ namespace TodoListWebApp.Controllers
                 profile.GivenName = " ";
                 profile.Surname = " ";
                 ViewBag.ErrorMessage = "AuthorizationRequired";
+                ViewBag.ErrorMessage = ee.Message + "\n" + ee.StackTrace;
 
                 return View(profile);
-
             }
         }
     }
