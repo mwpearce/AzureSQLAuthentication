@@ -85,7 +85,6 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Properties\PublishProfiles\EMNToDoListSPA - FTP.pubxml" />
     <None Include="Properties\PublishProfiles\EMNToDoListSPA - Web Deploy.pubxml" />
     <None Include="Web.Debug.config">
       <DependentUpon>Web.config</DependentUpon>
