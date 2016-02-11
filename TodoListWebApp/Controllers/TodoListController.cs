@@ -43,6 +43,7 @@ namespace TodoListWebApp.Controllers
         private const string TenantIdClaimType = "http://schemas.microsoft.com/identity/claims/tenantid";
         private static string clientId = ConfigurationManager.AppSettings["ida:ClientId"];
         private static string appKey = ConfigurationManager.AppSettings["ida:AppKey"];
+        private static string azureSqlResourceId = "https://database.windows.net/";
 
         private static bool useService = bool.Parse(ConfigurationManager.AppSettings["todo:UseService"]);
         //
@@ -51,13 +52,13 @@ namespace TodoListWebApp.Controllers
         {
             AuthenticationResult result = null;
             List<TodoItem> itemList = new List<TodoItem>();
-
+            AuthenticationContext authContext = null;
             if (useService)
             {
                 try
                 {
                     string userObjectID = ClaimsPrincipal.Current.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier").Value;
-                    AuthenticationContext authContext = new AuthenticationContext(Startup.Authority, new NaiveSessionCache(userObjectID));
+                    authContext = new AuthenticationContext(Startup.Authority, new NaiveSessionCache(userObjectID));
                     ClientCredential credential = new ClientCredential(clientId, appKey);
                     result = authContext.AcquireTokenSilent(todoListResourceId, credential, new UserIdentifier(userObjectID, UserIdentifierType.UniqueId));
 
@@ -135,9 +136,9 @@ namespace TodoListWebApp.Controllers
                 try
                 {
                     string userObjectID = ClaimsPrincipal.Current.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier").Value;
-                    AuthenticationContext authContext = new AuthenticationContext(Startup.Authority, new NaiveSessionCache(userObjectID));
+                    authContext = new AuthenticationContext(Startup.Authority, new NaiveSessionCache(userObjectID));
                     ClientCredential credential = new ClientCredential(clientId, appKey);
-                    result = authContext.AcquireTokenSilent(todoListResourceId, credential, new UserIdentifier(userObjectID, UserIdentifierType.UniqueId));
+                    result = authContext.AcquireTokenSilent(azureSqlResourceId, credential, new UserIdentifier(userObjectID, UserIdentifierType.UniqueId));
 
                     // A user's To Do list is keyed off of the NameIdentifier claim, which contains an immutable, unique identifier for the user.
                     Claim subject = ClaimsPrincipal.Current.FindFirst(ClaimTypes.NameIdentifier);
@@ -171,7 +172,7 @@ namespace TodoListWebApp.Controllers
                     }
 
                 }
-                catch (Exception ee)
+                catch (AdalSilentTokenAcquisitionException ee)
                 {
                     //
                     // The user needs to re-authorize.  Show them a message to that effect.
@@ -180,6 +181,17 @@ namespace TodoListWebApp.Controllers
                     newItem.Title = ee.Message;
                     itemList.Add(newItem);
                     ViewBag.ErrorMessage = "AuthorizationRequired";
+                    return View(itemList);
+                }
+                catch (Exception ee)
+                {
+                    //
+                    // An unexpected error occurred.  Show them a message to that effect.
+                    //
+                    TodoItem newItem = new TodoItem();
+                    newItem.Title = ee.Message;
+                    itemList.Add(newItem);
+                    ViewBag.ErrorMessage = "UnexpectedError";
                     return View(itemList);
                 }
             }
@@ -201,13 +213,13 @@ namespace TodoListWebApp.Controllers
                 //
                 AuthenticationResult result = null;
                 List<TodoItem> itemList = new List<TodoItem>();
-
+                AuthenticationContext authContext = null;
                 if (useService)
                 {
                     try
                     {
                         string userObjectID = ClaimsPrincipal.Current.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier").Value;
-                        AuthenticationContext authContext = new AuthenticationContext(Startup.Authority, new NaiveSessionCache(userObjectID));
+                        authContext = new AuthenticationContext(Startup.Authority, new NaiveSessionCache(userObjectID));
                         ClientCredential credential = new ClientCredential(clientId, appKey);
                         result = authContext.AcquireTokenSilent(todoListResourceId, credential, new UserIdentifier(userObjectID, UserIdentifierType.UniqueId));
 
@@ -275,9 +287,9 @@ namespace TodoListWebApp.Controllers
                     try
                     {
                         string userObjectID = ClaimsPrincipal.Current.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier").Value;
-                        AuthenticationContext authContext = new AuthenticationContext(Startup.Authority, new NaiveSessionCache(userObjectID));
+                        authContext = new AuthenticationContext(Startup.Authority, new NaiveSessionCache(userObjectID));
                         ClientCredential credential = new ClientCredential(clientId, appKey);
-                        result = authContext.AcquireTokenSilent(todoListResourceId, credential, new UserIdentifier(userObjectID, UserIdentifierType.UniqueId));
+                        result = authContext.AcquireTokenSilent(azureSqlResourceId, credential, new UserIdentifier(userObjectID, UserIdentifierType.UniqueId));
 
                         // A user's To Do list is keyed off of the NameIdentifier claim, which contains an immutable, unique identifier for the user.
                         Claim subject = ClaimsPrincipal.Current.FindFirst(ClaimTypes.NameIdentifier);
@@ -303,7 +315,7 @@ namespace TodoListWebApp.Controllers
                         }
 
                     }
-                    catch (Exception ee)// TODO: verify that the exception is 'silentauth failed'
+                    catch (AdalSilentTokenAcquisitionException ee)
                     {
                         //
                         // The user needs to re-authorize.  Show them a message to that effect.
@@ -313,7 +325,17 @@ namespace TodoListWebApp.Controllers
                         itemList.Add(newItem);
                         ViewBag.ErrorMessage = "AuthorizationRequired";
                         return View(itemList);
-
+                    }
+                    catch (Exception ee)
+                    {
+                        //
+                        // An unexpected error occurred.  Show them a message to that effect.
+                        //
+                        TodoItem newItem = new TodoItem();
+                        newItem.Title = ee.Message;
+                        itemList.Add(newItem);
+                        ViewBag.ErrorMessage = "UnexpectedError";
+                        return View(itemList);
                     }
                 }
 
